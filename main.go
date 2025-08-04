@@ -504,6 +504,31 @@ func authenticateHTTPRequest(r *http.Request) (string, error) {
 	return "user-1", nil
 }
 
+// --- 5. 中间件 ---
+
+// corsMiddleware 为HTTP请求添加CORS头
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 设置允许所有来源
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		// 设置允许的方法
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, PATCH")
+		// 设置允许的头
+		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, x-goog-api-client, x-goog-api-key, x-goog-user-project")
+		// 设置凭证是否可以被发送
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+		// 如果是预检请求(OPTIONS)，直接返回
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		// 调用下一个处理器
+		next.ServeHTTP(w, r)
+	})
+}
+
 // --- 主函数 ---
 
 func main() {
@@ -511,7 +536,8 @@ func main() {
 	http.HandleFunc(wsPath, handleWebSocket)
 
 	// HTTP 反向代理路由 (捕获所有其他请求)
-	http.HandleFunc("/", handleProxyRequest)
+	proxyHandler := http.HandlerFunc(handleProxyRequest)
+	http.Handle("/", corsMiddleware(proxyHandler))
 
 	log.Printf("Starting server on %s", proxyListenAddr)
 	log.Printf("WebSocket endpoint available at ws://%s%s", proxyListenAddr, wsPath)
